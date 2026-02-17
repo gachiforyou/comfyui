@@ -47,7 +47,6 @@ DIFFUSION_MODELS=(
   "https://civitai.com/api/download/models/2513182?type=Model&format=SafeTensor&size=pruned&fp=fp8"
   "https://civitai.com/api/download/models/2388627?type=Model&format=SafeTensor&size=full&fp=fp8"
 )
-)
 
 TEXT_ENCODER_MODELS=(
   "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
