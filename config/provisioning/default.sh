@@ -1,80 +1,56 @@
-#!/usr/bin/env bash
-set -eo pipefail
+#!/bin/bash
+set -e
 
-log(){ echo "[provision] $*"; }
+log() { echo -e "\n[Provision] $1\n"; }
 
-WORKSPACE="${WORKSPACE:-/workspace}"
-COMFY_WORKSPACE="${WORKSPACE}/ComfyUI"
+########################################
+# 0. 환경 변수 (Vast에서 주입된 값 사용)
+########################################
 
-PYTHON_BIN="${PYTHON_BIN:-python3}"
-PIP_BIN="${PIP_BIN:-pip3}"
-
-APT_PACKAGES=("aria2" "git")
-PIP_PACKAGES=("huggingface_hub" "hf_transfer")
-
-# =========================
-# MODELS & NODES
-# =========================
-
-NODES=(
-  "https://github.com/ltdrdata/ComfyUI-Manager"
-  "https://github.com/cubiq/ComfyUI_essentials"
-  "https://github.com/kijai/ComfyUI-KJNodes"
-  "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
-  "https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes"
-  "https://github.com/PGCRT/CRT-Nodes"
-  "https://github.com/yolain/ComfyUI-Easy-Use"
-)
-
-CLIP_VISION_MODELS=(
-  "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors"
-)
-
-LORA_MODELS=(
-  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors"
-  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors" 
-)
-
-VAE_MODELS=(
-  "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"
-)
-
-UPSCALE_MODELS=(
-  
-)
-
-DIFFUSION_MODELS=(
-  "https://civitai.com/api/download/models/2513182?type=Model&format=SafeTensor&size=pruned&fp=fp8"
-  "https://civitai.com/api/download/models/2388627?type=Model&format=SafeTensor&size=full&fp=fp8"
-)
-
-TEXT_ENCODER_MODELS=(
-  "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
-)
-
-# =========================
-# SETUP
-# =========================
-
-log "Installing apt packages..."
-apt-get update -y || true
-apt-get install -y --no-install-recommends "${APT_PACKAGES[@]}" || true
-
-log "Installing pip packages..."
-"$PIP_BIN" install --no-cache-dir "${PIP_PACKAGES[@]}" || true
-export HF_HUB_ENABLE_HF_TRANSFER=1
-
-# Ensure ComfyUI exists
-if [[ ! -f "$COMFY_WORKSPACE/main.py" ]]; then
-  log "ComfyUI not found. Cloning..."
-  git clone https://github.com/comfyanonymous/ComfyUI.git "$COMFY_WORKSPACE"
+if [ -z "$CIVITAI_TOKEN" ]; then
+  echo "ERROR: CIVITAI_TOKEN not set"
+  exit 1
 fi
 
-mkdir -p "$COMFY_WORKSPACE/models"
+export HF_HUB_ENABLE_HF_TRANSFER=1
 
-# =========================
-# DOWNLOAD FUNCTION
-# =========================
+########################################
+# 1. 기본 경로
+########################################
+
+COMFY="/workspace/ComfyUI"
+MODELS="$COMFY/models"
+CUSTOM="$COMFY/custom_nodes"
+
+########################################
+# 2. 시스템 패키지
+########################################
+
+apt update
+apt install -y aria2 git ffmpeg
+
+pip install --upgrade pip
+pip install huggingface_hub hf_transfer opencv-python-headless imageio-ffmpeg
+
+########################################
+# 3. Wan 2.2 폴더 구조
+########################################
+
+mkdir -p \
+  $MODELS/checkpoints \
+  $MODELS/diffusion_models \
+  $MODELS/unet \
+  $MODELS/text_encoders \
+  $MODELS/vae \
+  $MODELS/loras \
+  $MODELS/controlnet \
+  $MODELS/upscale_models
+
+mkdir -p $CUSTOM
+
+########################################
+# 4. 다운로드 함수
+########################################
 
 download() {
   local dir="$1"
@@ -82,63 +58,90 @@ download() {
 
   mkdir -p "$dir"
 
-  log "Downloading -> $dir"
-  log "URL: $url"
-
-  if command -v aria2c >/dev/null 2>&1; then
-    aria2c -x 8 -s 8 -k 1M -d "$dir" "$url" || log "FAILED: $url"
+  if [[ "$url" == *"civitai.com"* ]]; then
+    aria2c -x 8 -s 8 -k 1M \
+      --header="Authorization: Bearer ${CIVITAI_TOKEN}" \
+      -d "$dir" "$url"
   else
-    curl -L -o "$dir/$(basename "$url")" "$url" || log "FAILED: $url"
+    aria2c -x 8 -s 8 -k 1M -d "$dir" "$url"
   fi
 }
 
-# =========================
-# INSTALL NODES
-# =========================
+########################################
+# 5. 커스텀 노드 설치
+########################################
 
 log "Installing custom nodes..."
-NODES_DIR="${COMFY_WORKSPACE}/custom_nodes"
-mkdir -p "$NODES_DIR"
+
+NODES=(
+"https://github.com/ltdrdata/ComfyUI-Manager"
+"https://github.com/cubiq/ComfyUI_essentials"
+"https://github.com/kijai/ComfyUI-KJNodes"
+"https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+"https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes"
+"https://github.com/PGCRT/CRT-Nodes"
+"https://github.com/yolain/ComfyUI-Easy-Use"
+)
 
 for repo in "${NODES[@]}"; do
-  name="${repo##*/}"
-  path="${NODES_DIR}/${name}"
-
-  if [[ -d "$path" ]]; then
-    log "Updating $name"
-    git -C "$path" pull || true
-  else
-    log "Cloning $name"
-    git clone --depth=1 "$repo" "$path"
+  name=$(basename "$repo")
+  if [ ! -d "$CUSTOM/$name" ]; then
+    git clone "$repo" "$CUSTOM/$name"
   fi
 done
 
-# =========================
-# DOWNLOAD MODELS
-# =========================
+########################################
+# 6. Diffusion Models
+########################################
 
-for m in "${LORA_MODELS[@]}"; do
-  download "${COMFY_WORKSPACE}/models/loras" "$m"
+log "Downloading Diffusion Models..."
+
+DIFFUSION_MODELS=(
+"https://civitai.com/api/download/models/2513182?type=Model&format=SafeTensor&size=pruned&fp=fp8"
+"https://civitai.com/api/download/models/2388627?type=Model&format=SafeTensor&size=full&fp=fp8"
+)
+
+for model in "${DIFFUSION_MODELS[@]}"; do
+  download "$MODELS/diffusion_models" "$model"
 done
 
-for m in "${VAE_MODELS[@]}"; do
-  download "${COMFY_WORKSPACE}/models/vae" "$m"
+########################################
+# 7. LoRAs
+########################################
+
+log "Downloading LoRAs..."
+
+LORA_MODELS=(
+"https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors"
+"https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors"
+)
+
+for model in "${LORA_MODELS[@]}"; do
+  download "$MODELS/loras" "$model"
 done
 
-for m in "${UPSCALE_MODELS[@]}"; do
-  download "${COMFY_WORKSPACE}/models/upscale_models" "$m"
-done
+########################################
+# 8. VAE
+########################################
 
-for m in "${DIFFUSION_MODELS[@]}"; do
-  download "${COMFY_WORKSPACE}/models/diffusion_models" "$m"
-done
+log "Downloading VAE..."
 
-for m in "${TEXT_ENCODER_MODELS[@]}"; do
-  download "${COMFY_WORKSPACE}/models/text_encoders" "$m"
-done
+download "$MODELS/vae" \
+"https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"
 
-for m in "${CLIP_VISION_MODELS[@]}"; do
-  download "${COMFY_WORKSPACE}/models/clip_vision" "$m"
-done
+########################################
+# 9. Text Encoder
+########################################
 
-log "Provisioning complete."
+log "Downloading Text Encoder..."
+
+download "$MODELS/text_encoders" \
+"https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+
+########################################
+# 10. 권한 정리
+########################################
+
+chown -R user:user /workspace
+
+log "Provisioning Complete."
