@@ -1,110 +1,110 @@
 #!/bin/bash
+set -e
 
-log() { echo -e "\n[Provision] $1\n"; }
+echo "===== ComfyUI Provisioning Start ====="
 
 ########################################
-# 환경 변수 확인
+# 0. 환경 변수 확인
 ########################################
+
+if [ -z "$HF_TOKEN" ]; then
+  echo "HF_TOKEN is not set!"
+  exit 1
+fi
 
 if [ -z "$CIVITAI_TOKEN" ]; then
-  echo "CIVITAI_TOKEN not set"
+  echo "CIVITAI_TOKEN is not set!"
+  exit 1
 fi
 
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
 ########################################
-# 경로
+# 1. 기본 경로 설정
 ########################################
 
-COMFY="/workspace/ComfyUI"
-MODELS="$COMFY/models"
-CUSTOM="$COMFY/custom_nodes"
-
-########################################
-# 패키지
-########################################
-
-apt update || true
-apt install -y aria2 git ffmpeg || true
-
-pip install huggingface_hub hf_transfer opencv-python-headless imageio-ffmpeg || true
-
-########################################
-# 폴더
-########################################
+BASE="/workspace/ComfyUI/models"
 
 mkdir -p \
-  $MODELS/diffusion_models \
-  $MODELS/text_encoders \
-  $MODELS/vae \
-  $MODELS/loras
-
-mkdir -p $CUSTOM
+  $BASE/diffusion_models \
+  $BASE/loras \
+  $BASE/vae \
+  $BASE/text_encoders
 
 ########################################
-# 다운로드 함수
+# 2. Python 필수 패키지
 ########################################
 
-download() {
-  local dir="$1"
-  local url="$2"
+echo "Installing required python packages..."
 
-  mkdir -p "$dir"
+source /venv/main/bin/activate
 
-  echo "Downloading: $url"
+pip install --upgrade pip
+pip install opencv-python imageio imageio-ffmpeg einops timm
 
-  if [[ "$url" == *"civitai.com"* ]]; then
-    aria2c -x 8 -s 8 -k 1M \
-      --header="Authorization: Bearer ${CIVITAI_TOKEN}" \
-      -d "$dir" "$url" || true
+########################################
+# 3. 다운로드 함수
+########################################
+
+download_if_not_exists () {
+  FILE_PATH=$1
+  URL=$2
+  AUTH_HEADER=$3
+
+  if [ -f "$FILE_PATH" ]; then
+    echo "✔ Exists: $FILE_PATH"
   else
-    aria2c -x 8 -s 8 -k 1M -d "$dir" "$url" || true
+    echo "⬇ Downloading: $FILE_PATH"
+    if [ -z "$AUTH_HEADER" ]; then
+      wget -O "$FILE_PATH" "$URL"
+    else
+      wget --header="$AUTH_HEADER" -O "$FILE_PATH" "$URL"
+    fi
   fi
 }
 
 ########################################
-# 노드 설치
+# 4. Diffusion Models (Civitai)
 ########################################
 
-NODES=(
-"https://github.com/ltdrdata/ComfyUI-Manager"
-"https://github.com/cubiq/ComfyUI_essentials"
-"https://github.com/kijai/ComfyUI-KJNodes"
-"https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
-"https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes"
-"https://github.com/PGCRT/CRT-Nodes"
-"https://github.com/yolain/ComfyUI-Easy-Use"
-"https://github.com/chflame163/ComfyUI_LayerStyle"
-"https://github.com/pythongosssss/ComfyUI-Custom-Scripts"
-)
+download_if_not_exists \
+  "$BASE/diffusion_models/WAN2_2_MODEL_PRUNED_FP8.safetensors" \
+  "https://civitai.com/api/download/models/2513182?type=Model&format=SafeTensor&size=pruned&fp=fp8&token=$CIVITAI_TOKEN"
 
-for repo in "${NODES[@]}"; do
-  name=$(basename "$repo")
-  if [ ! -d "$CUSTOM/$name" ]; then
-    git clone "$repo" "$CUSTOM/$name" || true
-  fi
-done
+download_if_not_exists \
+  "$BASE/diffusion_models/WAN2_2_MODEL_FULL_FP8.safetensors" \
+  "https://civitai.com/api/download/models/2388627?type=Model&format=SafeTensor&size=full&fp=fp8&token=$CIVITAI_TOKEN"
 
 ########################################
-# 모델 다운로드
+# 5. LoRA Models (HuggingFace)
 ########################################
 
-download "$MODELS/diffusion_models" \
-"https://civitai.com/api/download/models/2513182?type=Model&format=SafeTensor&size=pruned&fp=fp8"
+download_if_not_exists \
+  "$BASE/loras/SVI_HIGH.safetensors" \
+  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors" \
+  "Authorization: Bearer $HF_TOKEN"
 
-download "$MODELS/diffusion_models" \
-"https://civitai.com/api/download/models/2388627?type=Model&format=SafeTensor&size=full&fp=fp8"
+download_if_not_exists \
+  "$BASE/loras/SVI_LOW.safetensors" \
+  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors" \
+  "Authorization: Bearer $HF_TOKEN"
 
-download "$MODELS/loras" \
-"https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors"
+########################################
+# 6. VAE
+########################################
 
-download "$MODELS/loras" \
-"https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors"
+download_if_not_exists \
+  "$BASE/vae/wan_2.1_vae.safetensors" \
+  "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors" \
+  "Authorization: Bearer $HF_TOKEN"
 
-download "$MODELS/vae" \
-"https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"
+########################################
+# 7. Text Encoder
+########################################
 
-download "$MODELS/text_encoders" \
-"https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+download_if_not_exists \
+  "$BASE/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" \
+  "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" \
+  "Authorization: Bearer $HF_TOKEN"
 
-echo "Provisioning finished."
+echo "===== Provisioning Complete ====="
