@@ -135,9 +135,10 @@ download_if_missing \
 ########################################
 
 download_if_missing \
-"$MODEL_DIR/vae/wan_2.1_vae.safetensors" \
-"https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors" \
+"$MODEL_DIR/vae/Wan2_1_VAE_bf16.safetensors" \
+"https://huggingface.co/Kijai/WanVideo_comfy/resolve/cecefb7460b80baa927df0092eee4853e61d4a11/Wan2_1_VAE_bf16.safetensors" \
 "Authorization: Bearer $HF_TOKEN"
+
 
 ########################################
 # Text Encoder
