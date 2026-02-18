@@ -70,6 +70,8 @@ install_node https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite
 install_node https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes
 install_node https://github.com/PGCRT/CRT-Nodes
 install_node https://github.com/yolain/ComfyUI-Easy-Use
+install_node https://github.com/pythongosssss/ComfyUI-Custom-Scripts
+install_node https://github.com/chflame163/ComfyUI_LayerStyle
 
 ########################################
 # 다운로드 함수 (이어받기 지원)
