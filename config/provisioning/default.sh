@@ -120,6 +120,16 @@ download_if_missing \
 "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors" \
 "Authorization: Bearer $HF_TOKEN"
 
+download_if_missing \
+"$MODEL_DIR/loras/WAN22_LIGHTX2V_HIGH.safetensors" \
+"https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_v1030_rank_64_bf16.safetensors" \
+"Authorization: Bearer $HF_TOKEN"
+
+download_if_missing \
+"$MODEL_DIR/loras/LIGHTX2V_DISTILL_480P.safetensors" \
+"https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Lightx2v/lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors" \
+"Authorization: Bearer $HF_TOKEN"
+
 ########################################
 # VAE
 ########################################
