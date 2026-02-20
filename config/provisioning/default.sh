@@ -1,67 +1,78 @@
-########################################
-# 0. 기본 설정
-########################################
+#!/bin/bash
+set -e
 
-export HF_HUB_ENABLE_HF_TRANSFER=1
-
-COMFY_DIR="/workspace/ComfyUI"
-MODEL_DIR="$COMFY_DIR/models"
-CUSTOM_NODE_DIR="$COMFY_DIR/custom_nodes"
+echo "========================================"
+echo "   ComfyUI + LTX2 FULL AUTO MASTER SETUP"
+echo "========================================"
 
 ########################################
-# 1. ComfyUI 최신화
+# 기본 경로 설정
 ########################################
 
-cd $COMFY_DIR
-git pull
-pip install -r requirements.txt
+VENV_PYTHON="/venv/main/bin/python"
+VENV_PIP="/venv/main/bin/pip"
+
+WORKSPACE="/workspace"
+COMFY="$WORKSPACE/ComfyUI"
+MODEL_DIR="$COMFY/models"
+CUSTOM="$COMFY/custom_nodes"
 
 ########################################
-# 2. 폴더 생성
+# 공용 함수
 ########################################
 
-mkdir -p \
-  $MODEL_DIR/diffusion_models \
-  $MODEL_DIR/loras \
-  $MODEL_DIR/text_encoders \
-  $MODEL_DIR/checkpoints \
-  $MODEL_DIR/vae \
-  $MODEL_DIR/latent_upscale_models \
-  $CUSTOM_NODE_DIR
-
-########################################
-# 3. 노드 설치 함수
-########################################
-
-install_node () {
-  REPO_URL=$1
-  FOLDER_NAME=$(basename "$REPO_URL")
-  TARGET_DIR="$CUSTOM_NODE_DIR/$FOLDER_NAME"
-
-  if [ -d "$TARGET_DIR" ]; then
-    echo "✅ Node exists: $FOLDER_NAME"
-  else
-    echo "⬇ Installing node: $FOLDER_NAME"
-    git clone "$REPO_URL" "$TARGET_DIR"
-  fi
-}
-
-########################################
-# 4. requirements 자동 설치
-########################################
-
-install_requirements () {
-  for dir in $CUSTOM_NODE_DIR/*; do
-    if [ -f "$dir/requirements.txt" ]; then
-      echo "📦 Installing requirements for $(basename $dir)"
-      pip install -r "$dir/requirements.txt"
+install_node() {
+    REPO_URL=$1
+    NAME=$(basename "$REPO_URL")
+    if [ ! -d "$CUSTOM/$NAME" ]; then
+        echo "Installing node: $NAME"
+        git clone "$REPO_URL" "$CUSTOM/$NAME"
+    else
+        echo "Node already exists: $NAME"
     fi
-  done
+}
+
+download_if_missing() {
+    FILE_PATH=$1
+    URL=$2
+    if [ ! -f "$FILE_PATH" ]; then
+        echo "Downloading $(basename $FILE_PATH)"
+        mkdir -p "$(dirname "$FILE_PATH")"
+        wget -O "$FILE_PATH" "$URL"
+    else
+        echo "Already exists: $(basename $FILE_PATH)"
+    fi
 }
 
 ########################################
-# 5. 네가 지정한 노드 전부 설치
+# 1. Python 환경 고정
 ########################################
+
+echo "Fixing Python environment..."
+
+$VENV_PIP install --upgrade pip --no-cache-dir
+
+$VENV_PIP install --no-cache-dir \
+transformers==4.44.2 \
+accelerate==0.33.0 \
+diffusers==0.36.0 \
+huggingface-hub==0.36.2 \
+tokenizers==0.19.1 \
+numpy==1.26.4 \
+protobuf \
+boto3 \
+opencv-python \
+imageio-ffmpeg \
+einops \
+sentencepiece \
+safetensors
+
+########################################
+# 2. 커스텀 노드 설치
+########################################
+
+mkdir -p "$CUSTOM"
+cd "$CUSTOM"
 
 install_node https://github.com/ltdrdata/ComfyUI-Manager
 install_node https://github.com/cubiq/ComfyUI_essentials
@@ -72,32 +83,25 @@ install_node https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite
 install_node https://github.com/olduvai-jp/ComfyUI-S3-IO
 
 ########################################
-# 6. 노드 의존성 설치
+# 3. 노드 requirements 자동 설치
 ########################################
 
-install_requirements
+for dir in */ ; do
+    if [ -f "$dir/requirements.txt" ]; then
+        echo "Installing requirements for $dir"
+        $VENV_PIP install -r "$dir/requirements.txt" --no-cache-dir || true
+    fi
+done
+
+
 
 ########################################
-# 7. 추가 패키지 안정화
+# 5. ComfyUI 실행
 ########################################
 
-pip install --upgrade transformers accelerate safetensors
-pip install boto3 imageio-ffmpeg
+echo "========================================"
+echo "  🎉 LTX2 19B Distilled 완전 안정 세팅 완료!"
+echo "========================================"
 
-########################################
-# 8. 다운로드 함수
-########################################
-
-download_if_missing () {
-  FILE_PATH=$1
-  URL=$2
-
-  if [ -f "$FILE_PATH" ]; then
-    echo "✅ Already exists: $FILE_PATH"
-  else
-    echo "⬇ Downloading: $FILE_PATH"
-    wget --header="Authorization: Bearer $HF_TOKEN" -O "$FILE_PATH" "$URL"
-  fi
-}
-
-
+cd "$COMFY"
+$VENV_PYTHON main.py --listen 0.0.0.0 --port 8188
