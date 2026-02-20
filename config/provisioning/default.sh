@@ -1,152 +1,88 @@
-#!/bin/bash
-set -e
-
-echo "===== COMFYUI AUTO PROVISION START ====="
-
 ########################################
-# 환경 변수 확인
+# 0. 환경 변수
 ########################################
-
-if [ -z "$HF_TOKEN" ]; then
-  echo "HF_TOKEN not set"
-  exit 1
-fi
-
-if [ -z "$CIVITAI_TOKEN" ]; then
-  echo "CIVITAI_TOKEN not set"
-  exit 1
-fi
 
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
-BASE="/workspace/ComfyUI"
-MODEL_DIR="$BASE/models"
-NODE_DIR="$BASE/custom_nodes"
+# HF_TOKEN은 Vast 환경변수에 이미 입력되어 있어야 함
+# export HF_TOKEN=hf_xxxxx  ← 여기에 직접 적지 말 것
+
+########################################
+# 1. 기본 경로 설정
+########################################
+
+BASE="/workspace/ComfyUI/models"
+MODEL_DIR="$BASE"
 
 mkdir -p \
   $MODEL_DIR/diffusion_models \
   $MODEL_DIR/loras \
-  $MODEL_DIR/vae \
   $MODEL_DIR/text_encoders \
-  $NODE_DIR
+  $MODEL_DIR/checkpoints \
+  $MODEL_DIR/vae \
+  $MODEL_DIR/latent_upscale_models
 
 ########################################
-# Python 환경
-########################################
-
-source /venv/main/bin/activate
-
-pip install --upgrade pip
-pip install opencv-python imageio imageio-ffmpeg einops timm
-
-########################################
-# Custom Nodes 자동 설치
-########################################
-
-install_node () {
-  REPO=$1
-  NAME=$(basename $REPO)
-  cd $NODE_DIR
-
-  if [ -d "$NAME" ]; then
-    echo "Updating $NAME"
-    cd $NAME
-    git pull
-    cd ..
-  else
-    echo "Installing $NAME"
-    git clone $REPO
-  fi
-
-  if [ -f "$NAME/requirements.txt" ]; then
-    pip install -r "$NAME/requirements.txt"
-  fi
-}
-
-install_node https://github.com/ltdrdata/ComfyUI-Manager
-install_node https://github.com/cubiq/ComfyUI_essentials
-install_node https://github.com/kijai/ComfyUI-KJNodes
-install_node https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite
-install_node https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes
-install_node https://github.com/PGCRT/CRT-Nodes
-install_node https://github.com/yolain/ComfyUI-Easy-Use
-install_node https://github.com/pythongosssss/ComfyUI-Custom-Scripts
-install_node https://github.com/chflame163/ComfyUI_LayerStyle
-
-########################################
-# 다운로드 함수 (이어받기 지원)
+# 2. 다운로드 함수
 ########################################
 
 download_if_missing () {
-  FILE=$1
+  FILE_PATH=$1
   URL=$2
   HEADER=$3
 
-  if [ -f "$FILE" ]; then
-    echo "Exists: $FILE"
+  if [ -f "$FILE_PATH" ]; then
+    echo "✅ Already exists: $FILE_PATH"
   else
-    echo "Downloading: $FILE"
-    if [ -z "$HEADER" ]; then
-      wget -c -O "$FILE" "$URL"
-    else
-      wget -c --header="$HEADER" -O "$FILE" "$URL"
-    fi
+    echo "⬇ Downloading: $FILE_PATH"
+    wget --header="$HEADER" -O "$FILE_PATH" "$URL"
   fi
 }
 
 ########################################
-# Diffusion Models (Civitai)
+# 3. LTX2 19B Distilled 모델 세트
 ########################################
 
+# 🔹 Diffusion Model
 download_if_missing \
-"$MODEL_DIR/diffusion_models/WAN2_2_FULL_FP8.safetensors" \
-"https://civitai.com/api/download/models/2555640?type=Model&format=SafeTensor&size=full&fp=fp8&token=$CIVITAI_TOKEN"
-
-download_if_missing \
-"$MODEL_DIR/diffusion_models/WAN2_2_PRUNED_FP8.safetensors" \
-"https://civitai.com/api/download/models/2513182?type=Model&format=SafeTensor&size=pruned&fp=fp8&token=$CIVITAI_TOKEN"
-
-########################################
-# LoRA
-########################################
-
-download_if_missing \
-"$MODEL_DIR/loras/SVI_HIGH.safetensors" \
-"https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors" \
+"$MODEL_DIR/diffusion_models/ltx-2-19b-distilled_transformer_only_bf16.safetensors" \
+"https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/diffusion_models/ltx-2-19b-distilled_transformer_only_bf16.safetensors" \
 "Authorization: Bearer $HF_TOKEN"
 
+# 🔹 Text Encoder (Gemma 3 12B)
 download_if_missing \
-"$MODEL_DIR/loras/SVI_LOW.safetensors" \
-"https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors" \
+"$MODEL_DIR/text_encoders/gemma_3_12B_it.safetensors" \
+"https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it.safetensors" \
 "Authorization: Bearer $HF_TOKEN"
 
+# 🔹 Embedding Connector
 download_if_missing \
-"$MODEL_DIR/loras/WAN22_LIGHTX2V_HIGH.safetensors" \
-"https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_v1030_rank_64_bf16.safetensors" \
+"$MODEL_DIR/checkpoints/ltx-2-19b-embeddings_connector_distill_bf16.safetensors" \
+"https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/text_encoders/ltx-2-19b-embeddings_connector_distill_bf16.safetensors" \
 "Authorization: Bearer $HF_TOKEN"
 
+# 🔹 VAE (Video)
 download_if_missing \
-"$MODEL_DIR/loras/LIGHTX2V_DISTILL_480P.safetensors" \
-"https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Lightx2v/lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors" \
+"$MODEL_DIR/vae/LTX2_video_vae_bf16.safetensors" \
+"https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/VAE/LTX2_video_vae_bf16.safetensors" \
 "Authorization: Bearer $HF_TOKEN"
 
-########################################
-# VAE
-########################################
-
+# 🔹 VAE (Audio)
 download_if_missing \
-"$MODEL_DIR/vae/Wan2_1_VAE_bf16.safetensors" \
-"https://huggingface.co/Kijai/WanVideo_comfy/resolve/cecefb7460b80baa927df0092eee4853e61d4a11/Wan2_1_VAE_bf16.safetensors" \
+"$MODEL_DIR/vae/LTX2_audio_vae_bf16.safetensors" \
+"https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/VAE/LTX2_audio_vae_bf16.safetensors" \
 "Authorization: Bearer $HF_TOKEN"
 
-
-########################################
-# Text Encoder
-########################################
-
+# 🔹 LoRA (IC Detailer)
 download_if_missing \
-"$MODEL_DIR/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" \
-"https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" \
+"$MODEL_DIR/loras/ltx-2-19b-ic-lora-detailer.safetensors" \
+"https://huggingface.co/Lightricks/LTX-2-19b-IC-LoRA-Detailer/resolve/main/ltx-2-19b-ic-lora-detailer.safetensors" \
 "Authorization: Bearer $HF_TOKEN"
 
-echo "===== AUTO PROVISION COMPLETE ====="
+# 🔹 Latent Upscaler
+download_if_missing \
+"$MODEL_DIR/latent_upscale_models/ltx-2-spatial-upscaler-x2-1.0.safetensors" \
+"https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-spatial-upscaler-x2-1.0.safetensors" \
+"Authorization: Bearer $HF_TOKEN"
+
+echo "🎉 LTX2 19B Distilled 모델 세트 다운로드 완료!"
