@@ -60,26 +60,32 @@ install_requirements () {
 }
 
 ########################################
-# 5. 최소 안정 노드 세트 (LTX2용)
+# 5. 네가 지정한 노드 전부 설치
 ########################################
 
 install_node https://github.com/ltdrdata/ComfyUI-Manager
+install_node https://github.com/cubiq/ComfyUI_essentials
 install_node https://github.com/kijai/ComfyUI-KJNodes
+install_node https://github.com/yolain/ComfyUI-Easy-Use
 install_node https://github.com/princepainter/ComfyUI-PainterLTXV2
 install_node https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite
+install_node https://github.com/olduvai-jp/ComfyUI-S3-IO
+
+########################################
+# 6. 노드 의존성 설치
+########################################
 
 install_requirements
 
 ########################################
-# 6. 추가 필수 패키지 안정화
+# 7. 추가 패키지 안정화
 ########################################
 
-pip install --upgrade torch torchvision torchaudio
 pip install --upgrade transformers accelerate safetensors
 pip install boto3 imageio-ffmpeg
 
 ########################################
-# 7. 다운로드 함수
+# 8. 다운로드 함수
 ########################################
 
 download_if_missing () {
@@ -94,4 +100,48 @@ download_if_missing () {
   fi
 }
 
+########################################
+# 9. LTX2 19B Distilled 모델 세트
+########################################
 
+# Diffusion transformer_only
+download_if_missing \
+"$MODEL_DIR/diffusion_models/ltx-2-19b-distilled_transformer_only_bf16.safetensors" \
+"https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/diffusion_models/ltx-2-19b-distilled_transformer_only_bf16.safetensors"
+
+# Full distilled checkpoint
+download_if_missing \
+"$MODEL_DIR/checkpoints/ltx-2-19b-distilled.safetensors" \
+"https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-distilled.safetensors"
+
+# Embedding connector
+download_if_missing \
+"$MODEL_DIR/checkpoints/ltx-2-19b-embeddings_connector_distill_bf16.safetensors" \
+"https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/text_encoders/ltx-2-19b-embeddings_connector_distill_bf16.safetensors"
+
+# Text encoder
+download_if_missing \
+"$MODEL_DIR/text_encoders/gemma_3_12B_it.safetensors" \
+"https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it.safetensors"
+
+# VAE video
+download_if_missing \
+"$MODEL_DIR/vae/LTX2_video_vae_bf16.safetensors" \
+"https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/VAE/LTX2_video_vae_bf16.safetensors"
+
+# VAE audio
+download_if_missing \
+"$MODEL_DIR/vae/LTX2_audio_vae_bf16.safetensors" \
+"https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/VAE/LTX2_audio_vae_bf16.safetensors"
+
+# LoRA detailer
+download_if_missing \
+"$MODEL_DIR/loras/ltx-2-19b-ic-lora-detailer.safetensors" \
+"https://huggingface.co/Lightricks/LTX-2-19b-IC-LoRA-Detailer/resolve/main/ltx-2-19b-ic-lora-detailer.safetensors"
+
+# Latent upscaler
+download_if_missing \
+"$MODEL_DIR/latent_upscale_models/ltx-2-spatial-upscaler-x2-1.0.safetensors" \
+"https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-spatial-upscaler-x2-1.0.safetensors"
+
+echo "🎉 모든 노드 + LTX2 19B Distilled 세팅 완료!"
