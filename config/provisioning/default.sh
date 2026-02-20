@@ -65,6 +65,11 @@ download_if_missing () {
 install_node https://github.com/ltdrdata/ComfyUI-Manager
 install_node https://github.com/cubiq/ComfyUI_essentials
 install_node https://github.com/kijai/ComfyUI-KJNodes
+install_node https://github.com/yolain/ComfyUI-Easy-Use
+install_node https://github.com/princepainter/ComfyUI-PainterLTXV2
+install_node https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite
+install_node https://github.com/olduvai-jp/ComfyUI-S3-IO
+
 
 ########################################
 # 5. LTX2 19B Distilled 모델 세트
